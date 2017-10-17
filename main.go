@@ -18,7 +18,7 @@ func checkRepo(path string, fetchFlag bool, mu *sync.Mutex, wg *sync.WaitGroup) 
 
 	fetchcmd := exec.Command("git", worktree, gitdir, "fetch", "--all")
 	statuscmd := exec.Command("git", worktree, gitdir, "status", "--porcelain")
-	revlistcmd := exec.Command("git", worktree, gitdir, "rev-list", "HEAD@{upstream}..HEAD")
+	revlistcmd := exec.Command("git", worktree, gitdir, "rev-list", "--left-right", "--boundary", "@{upstream}...")
 
 	var statusOut, revlistOut []byte
 	var err error
@@ -41,15 +41,13 @@ func checkRepo(path string, fetchFlag bool, mu *sync.Mutex, wg *sync.WaitGroup) 
 		fmt.Println("git status:", err)
 		return
 	}
-	if len(statusOut) == 0 {
-		if revlistOut, err = revlistcmd.CombinedOutput(); err != nil {
-			mu.Lock()
-			defer mu.Unlock()
-			fmt.Println(dir)
-			os.Stdout.Write(revlistOut)
-			fmt.Println("git rev-list:", err)
-			return
-		}
+	if revlistOut, err = revlistcmd.CombinedOutput(); err != nil {
+		mu.Lock()
+		defer mu.Unlock()
+		fmt.Println(dir)
+		os.Stdout.Write(revlistOut)
+		fmt.Println("git rev-list:", err)
+		return
 	}
 
 	mu.Lock()
