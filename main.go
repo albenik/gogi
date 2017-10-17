@@ -9,7 +9,7 @@ import (
 	"sync"
 )
 
-func checkRepo(path string, mu *sync.Mutex, wg *sync.WaitGroup) {
+func checkRepo(path string, fetchFlag bool, mu *sync.Mutex, wg *sync.WaitGroup) {
 	defer wg.Done()
 
 	dir := filepath.Dir(path)
@@ -20,15 +20,18 @@ func checkRepo(path string, mu *sync.Mutex, wg *sync.WaitGroup) {
 	statuscmd := exec.Command("git", worktree, gitdir, "status", "--porcelain")
 	revlistcmd := exec.Command("git", worktree, gitdir, "rev-list", "HEAD@{upstream}..HEAD")
 
-	var fetchOut, statusOut, revlistOut []byte
+	var statusOut, revlistOut []byte
 	var err error
-	if fetchOut, err = fetchcmd.CombinedOutput(); err != nil {
-		mu.Lock()
-		defer mu.Unlock()
-		fmt.Println(dir)
-		os.Stdout.Write(fetchOut)
-		fmt.Println("git fetch:", err)
-		return
+
+	if fetchFlag {
+		if fetchOut, err := fetchcmd.CombinedOutput(); err != nil {
+			mu.Lock()
+			defer mu.Unlock()
+			fmt.Println(dir)
+			os.Stdout.Write(fetchOut)
+			fmt.Println("git fetch:", err)
+			return
+		}
 	}
 	if statusOut, err = statuscmd.CombinedOutput(); err != nil {
 		mu.Lock()
@@ -53,7 +56,8 @@ func checkRepo(path string, mu *sync.Mutex, wg *sync.WaitGroup) {
 	defer mu.Unlock()
 
 	if len(statusOut) > 0 || len(revlistOut) > 0 {
-		fmt.Fprintln(os.Stdout, "\n", path)
+		fmt.Fprintln(os.Stdout)
+		fmt.Fprintln(os.Stdout, dir)
 		os.Stdout.Write(statusOut)
 		os.Stdout.Write(revlistOut)
 	}
@@ -61,7 +65,14 @@ func checkRepo(path string, mu *sync.Mutex, wg *sync.WaitGroup) {
 }
 
 func mainfunc() int {
+	helpFlag := flag.Bool("help", false, "Display help")
+	fetchFlag := flag.Bool("fetch", false, "Fetch from remotes and check commits ahead")
 	flag.Parse()
+
+	if *helpFlag {
+		flag.Usage()
+		return 0
+	}
 
 	var (
 		err  error
@@ -90,7 +101,7 @@ func mainfunc() int {
 	err = filepath.Walk(root, func(path string, f os.FileInfo, err error) error {
 		if f.IsDir() && f.Name() == ".git" {
 			wg.Add(1)
-			go checkRepo(path, &mu, &wg)
+			go checkRepo(path, *fetchFlag, &mu, &wg)
 		}
 		return nil
 	})
