@@ -97,6 +97,10 @@ func mainfunc() int {
 	}
 
 	err = filepath.Walk(root, func(path string, f os.FileInfo, err error) error {
+		if err != nil {
+			fmt.Println("ERROR:", err)
+			return err
+		}
 		if f.IsDir() && f.Name() == ".git" {
 			wg.Add(1)
 			go checkRepo(path, *fetchFlag, &mu, &wg)
