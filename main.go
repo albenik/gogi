@@ -4,65 +4,13 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sync"
+
+	"github.com/albenik/gogi/vcs/git"
 )
 
-func checkRepo(path string, fetchFlag bool, mu *sync.Mutex, wg *sync.WaitGroup) {
-	defer wg.Done()
-
-	dir := filepath.Dir(path)
-	worktree := "--work-tree=" + dir
-	gitdir := "--git-dir=" + path
-
-	fetchcmd := exec.Command("git", worktree, gitdir, "fetch", "--all")
-	statuscmd := exec.Command("git", worktree, gitdir, "status", "--porcelain")
-	revlistcmd := exec.Command("git", worktree, gitdir, "rev-list", "--left-right", "--boundary", "@{upstream}...")
-
-	var statusOut, revlistOut []byte
-	var err error
-
-	if fetchFlag {
-		if fetchOut, err := fetchcmd.CombinedOutput(); err != nil {
-			mu.Lock()
-			defer mu.Unlock()
-			fmt.Println(dir)
-			os.Stdout.Write(fetchOut)
-			fmt.Println("git fetch:", err)
-			return
-		}
-	}
-	if statusOut, err = statuscmd.CombinedOutput(); err != nil {
-		mu.Lock()
-		defer mu.Unlock()
-		fmt.Println(dir)
-		os.Stdout.Write(statusOut)
-		fmt.Println("git status:", err)
-		return
-	}
-	if revlistOut, err = revlistcmd.CombinedOutput(); err != nil {
-		mu.Lock()
-		defer mu.Unlock()
-		fmt.Println(dir)
-		os.Stdout.Write(revlistOut)
-		fmt.Println("git rev-list:", err)
-		return
-	}
-
-	mu.Lock()
-	defer mu.Unlock()
-
-	if len(statusOut) > 0 || len(revlistOut) > 0 {
-		fmt.Fprintln(os.Stdout)
-		fmt.Fprintln(os.Stdout, dir)
-		os.Stdout.Write(statusOut)
-		os.Stdout.Write(revlistOut)
-	}
-	return
-}
-
-func mainfunc() int {
+func mainf_() int {
 	helpFlag := flag.Bool("help", false, "Display help")
 	fetchFlag := flag.Bool("fetch", false, "Fetch from remotes and check commits ahead")
 	flag.Parse()
@@ -75,7 +23,6 @@ func mainfunc() int {
 	var (
 		err  error
 		root string
-		mu   sync.Mutex
 		wg   sync.WaitGroup
 	)
 
@@ -103,7 +50,7 @@ func mainfunc() int {
 		}
 		if f.IsDir() && f.Name() == ".git" {
 			wg.Add(1)
-			go checkRepo(path, *fetchFlag, &mu, &wg)
+			go git.NewRepo(path).Check(&wg, *fetchFlag)
 		}
 		return nil
 	})
@@ -116,5 +63,5 @@ func mainfunc() int {
 }
 
 func main() {
-	os.Exit(mainfunc())
+	os.Exit(mainf_())
 }
